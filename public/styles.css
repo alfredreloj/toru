@@ -1,0 +1,194 @@
+/* Toru — shared styles. Soft, light, calm. */
+
+:root {
+  --bg: #f4f5f8;
+  --card: #ffffff;
+  --ink: #1c2333;
+  --ink-soft: #5b647a;
+  --ink-faint: #9aa2b5;
+  --line: #e7e9f0;
+  --accent: #5b6ee0;
+  --accent-dark: #4453c4;
+  --accent-soft: #eef0fc;
+  --ok: #2ea774;
+  --danger: #d9534f;
+  --danger-soft: #fdeeee;
+  --white: #ffffff;
+  --tint: #fafbff;
+  --row-bg: #fcfcfe;
+  --accent-soft-2: #e3e6fb;
+  --preview-bg: #0d0f14;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(28, 35, 51, 0.04), 0 8px 24px rgba(28, 35, 51, 0.06);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+
+/* Brand */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+.brand .mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.brand h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.tagline {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 15px;
+  margin: 0 0 32px;
+}
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
+}
+
+/* Dropzone */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: 14px;
+  padding: 44px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.drop:hover { border-color: var(--accent); background: var(--tint); }
+.drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+.drop .icon { font-size: 34px; }
+.drop .big { font-size: 16px; font-weight: 600; margin: 10px 0 4px; }
+.drop .small { color: var(--ink-faint); font-size: 13px; }
+
+/* File list */
+.files { list-style: none; margin: 20px 0 0; padding: 0; }
+.files li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: var(--row-bg);
+}
+.files .fi-ic { font-size: 20px; flex: none; width: 24px; text-align: center; }
+.files .fi-meta { flex: 1; min-width: 0; }
+.files .fi-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files .fi-size { font-size: 12px; color: var(--ink-faint); }
+.files .fi-x {
+  border: none; background: none; color: var(--ink-faint);
+  cursor: pointer; font-size: 18px; padding: 2px 6px; border-radius: 6px;
+}
+.files .fi-x:hover { color: var(--danger); background: var(--danger-soft); }
+
+.totalbar {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 8px; font-size: 13px; color: var(--ink-soft);
+}
+.totalbar .over { color: var(--danger); font-weight: 600; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; border-radius: 10px; padding: 12px 18px;
+  font-size: 15px; font-weight: 600; font-family: var(--font);
+  cursor: pointer; transition: background 0.15s, opacity 0.15s;
+}
+.btn-primary { background: var(--accent); color: var(--white); width: 100%; margin-top: 18px; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost {
+  background: var(--accent-soft); color: var(--accent-dark);
+}
+.btn-ghost:hover { background: var(--accent-soft-2); }
+
+/* Progress */
+.progress { margin-top: 18px; }
+.progress .track { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.progress .fill { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.progress .label { font-size: 13px; color: var(--ink-soft); margin-top: 8px; text-align: center; }
+
+/* Result / link box */
+.linkbox {
+  display: flex; gap: 8px; margin-top: 6px;
+}
+.linkbox input {
+  flex: 1; min-width: 0; padding: 12px 14px; font-size: 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--tint);
+  color: var(--ink); font-family: var(--font);
+}
+.result-note { font-size: 13px; color: var(--ink-soft); margin-top: 14px; text-align: center; }
+.result-note b { color: var(--ink); }
+
+.hidden { display: none !important; }
+
+/* Download page previews */
+.dl-file { margin-bottom: 14px; }
+.dl-head {
+  display: flex; align-items: center; gap: 12px; padding: 12px 0;
+}
+.dl-head .fi-ic { font-size: 22px; width: 26px; text-align: center; }
+.dl-head .fi-meta { flex: 1; min-width: 0; }
+.dl-head .fi-name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-head .fi-size { font-size: 12px; color: var(--ink-faint); }
+.preview { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 10px; }
+.preview img, .preview video { display: block; width: 100%; max-height: 460px; object-fit: contain; background: var(--preview-bg); }
+.preview audio { width: 100%; display: block; }
+.dl-actions { display: flex; gap: 8px; }
+.dl-actions .btn { flex: 1; }
+
+.expiry {
+  text-align: center; font-size: 13px; color: var(--ink-soft);
+  margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+}
+.expiry b { color: var(--ink); }
+
+.state {
+  text-align: center; padding: 40px 20px; color: var(--ink-soft);
+}
+.state .icon { font-size: 40px; }
+.state h2 { color: var(--ink); font-size: 20px; margin: 12px 0 6px; }
+
+.foot {
+  text-align: center; margin-top: 28px; font-size: 12px; color: var(--ink-faint);
+}
+.foot a { color: var(--accent-dark); text-decoration: none; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  background: var(--ink); color: var(--white); padding: 10px 18px; border-radius: 99px;
+  font-size: 14px; box-shadow: var(--shadow); opacity: 0; transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toru — shared files</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⛩️</text></svg>" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 13c6 3 30 3 36 0M9 18c4 2 26 2 30 0" stroke="#5b6ee0" stroke-width="3" stroke-linecap="round"/>
+        <path d="M13 18v22M35 18v22" stroke="#5b6ee0" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <h1>Toru</h1>
+    </div>
+    <p class="tagline">Someone shared these files with you.</p>
+
+    <div class="card" id="card">
+      <div class="state" id="loading">
+        <div class="icon">⏳</div>
+        <h2>Loading…</h2>
+      </div>
+    </div>
+
+    <p class="foot"><a href="/">Share your own files with Toru →</a></p>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const id = location.pathname.split("/").pop();
+    const cardEl = document.getElementById("card");
+
+    function humanSize(bytes) {
+      const u = ["B", "KB", "MB", "GB"];
+      let n = bytes, i = 0;
+      while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+      return n.toFixed(n < 10 && i > 0 ? 1 : 0) + " " + u[i];
+    }
+
+    function iconFor(type) {
+      if (!type) return "📄";
+      if (type.startsWith("image/")) return "🖼️";
+      if (type.startsWith("video/")) return "🎬";
+      if (type.startsWith("audio/")) return "🎵";
+      if (type.includes("pdf")) return "📕";
+      if (type.includes("zip") || type.includes("compressed")) return "🗜️";
+      if (type.includes("sheet") || type.includes("excel") || type.includes("csv")) return "📊";
+      if (type.includes("word") || type.includes("document")) return "📝";
+      return "📄";
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function previewHtml(f) {
+      const src = "/api/file/" + id + "/" + f.fileId;
+      if (f.type && f.type.startsWith("image/"))
+        return '<div class="preview"><img loading="lazy" src="' + src + '" alt=""></div>';
+      if (f.type && f.type.startsWith("video/"))
+        return '<div class="preview"><video controls preload="metadata" src="' + src + '"></video></div>';
+      if (f.type && f.type.startsWith("audio/"))
+        return '<div class="preview" style="padding:14px;"><audio controls src="' + src + '"></audio></div>';
+      return "";
+    }
+
+    function toast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 1800);
+    }
+
+    function renderState(icon, title, sub) {
+      cardEl.innerHTML =
+        '<div class="state"><div class="icon">' + icon + '</div><h2>' + title + '</h2><p>' + (sub || "") + '</p></div>';
+    }
+
+    async function load() {
+      let data;
+      try {
+        const r = await fetch("/api/link/" + encodeURIComponent(id));
+        if (r.status === 404) return renderState("🔗", "Link expired or not found", "Files on Toru are deleted 24 hours after upload.");
+        if (!r.ok) return renderState("⚠️", "Something went wrong", "Please try the link again.");
+        data = await r.json();
+      } catch {
+        return renderState("⚠️", "Something went wrong", "Please try the link again.");
+      }
+
+      let html = "";
+      data.files.forEach((f) => {
+        const src = "/api/file/" + id + "/" + f.fileId;
+        html +=
+          '<div class="dl-file">' +
+            '<div class="dl-head">' +
+              '<span class="fi-ic">' + iconFor(f.type) + '</span>' +
+              '<span class="fi-meta"><div class="fi-name">' + esc(f.name) + '</div>' +
+              '<div class="fi-size">' + (f.sizeHuman || humanSize(f.size)) + '</div></span>' +
+            '</div>' +
+            previewHtml(f) +
+            '<div class="dl-actions">' +
+              '<a class="btn btn-ghost" href="' + src + '?dl=1">⬇ Download</a>' +
+            '</div>' +
+          '</div>';
+      });
+
+      if (data.files.length > 1) {
+        html +=
+          '<button class="btn btn-primary" id="zip-btn" style="margin-top:8px;">⬇ Download all (' +
+          data.files.length + ' files · ' + humanSize(data.totalSize) + ')</button>';
+      }
+
+      const exp = new Date(data.expiresAt);
+      html += '<p class="expiry">These files expire <b>' +
+        exp.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) +
+        '</b></p>';
+
+      cardEl.innerHTML = html;
+
+      const zip = document.getElementById("zip-btn");
+      if (zip) zip.onclick = () => { window.location = "/api/zip/" + id; toast("Preparing your download…"); };
+    }
+
+    load();
+  </script>
+</body>
+</html>
