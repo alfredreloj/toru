@@ -24,6 +24,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pipeline } from "node:stream";
 import {
   S3Client,
   GetObjectCommand,
@@ -50,7 +51,20 @@ const s3 = new S3Client({
     secretAccessKey: process.env.SPACES_SECRET,
   },
   forcePathStyle: false,
+  // The SDK has no timeouts by default, so one stalled Spaces socket used to
+  // hang a request forever. Fail fast instead; requestTimeout is socket idle time.
+  requestHandler: { connectionTimeout: 10_000, requestTimeout: 120_000 },
 });
+
+/**
+ * Pipe a Spaces object body to the HTTP response. pipeline() destroys the
+ * Spaces stream when the viewer disconnects (video/PDF range requests abort
+ * all the time) — a plain .pipe() leaked that socket, and after 50 leaks the
+ * SDK pool was exhausted and every upload/download hung.
+ */
+function streamToResponse(body, res) {
+  pipeline(body, res, () => {});
+}
 
 // ── ID generation ───────────────────────────────────────────────────────────
 // Short, URL-safe, unguessable ids. base62 keeps links short and phone-typeable.
@@ -286,7 +300,7 @@ app.get("/api/file/:id/:fileId", async (req, res) => {
       res.status(206);
       res.setHeader("Content-Range", obj.ContentRange);
     }
-    obj.Body.pipe(res);
+    streamToResponse(obj.Body, res);
   } catch (e) {
     res.status(404).send("File not found.");
   }
@@ -301,17 +315,28 @@ app.get("/api/zip/:id", async (req, res) => {
   res.setHeader("Content-Disposition", `attachment; filename="toru-${meta.id}.zip"`);
 
   const archive = archiver("zip", { zlib: { level: 6 } });
-  archive.on("error", () => res.destroy());
-  archive.pipe(res);
+  const bodies = [];
+  // On abort, release every Spaces stream already opened (same socket leak as /api/file).
+  const releaseBodies = () => bodies.forEach((b) => b.destroy());
+  pipeline(archive, res, (err) => {
+    if (err) {
+      archive.abort();
+      releaseBodies();
+    }
+  });
   try {
     for (const f of meta.files) {
+      if (res.destroyed) break;
       const obj = await s3.send(
         new GetObjectCommand({ Bucket: BUCKET, Key: `${meta.id}/${f.fileId}` })
       );
+      bodies.push(obj.Body);
       archive.append(obj.Body, { name: f.name });
     }
-    await archive.finalize();
+    if (res.destroyed) releaseBodies();
+    else await archive.finalize();
   } catch {
+    releaseBodies();
     res.destroy();
   }
 });
