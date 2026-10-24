@@ -87,6 +87,11 @@
       try {
         const r = await fetch("/api/link/" + encodeURIComponent(id));
         if (r.status === 404) return renderState("🔗", "Link expired or not found", "Files on Toru are deleted 24 hours after upload.");
+        if (r.status === 503) {
+          return renderState("⚠️", "Can't load these files right now",
+            "Toru's file storage isn't responding. Your link is still valid — please try again in a few minutes.<br><br>" +
+            '<a class="btn btn-ghost" href="">Try again</a>');
+        }
         if (!r.ok) return renderState("⚠️", "Something went wrong", "Please try the link again.");
         data = await r.json();
       } catch {

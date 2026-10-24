@@ -41,6 +41,11 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_TOTAL_BYTES = 500 * 1024 * 1024; // 500 MB total per link (all files combined)
 const MAX_FILES = 50; // guard against a single request with thousands of files
 const EXPIRY_MS = 24 * 60 * 60 * 1000; // links live for 24h
+const META_TIMEOUT_MS = 15_000; // a link-page read is tiny; 15s without an answer means storage is down
+const STORAGE_DOWN_MSG =
+  "Toru can't reach its file storage right now. Your link is still valid — please try again in a few minutes.";
+const UPLOAD_FAILED_MSG =
+  "Toru couldn't save your files because its file storage isn't responding. Nothing was uploaded — please try again in a few minutes.";
 
 const BUCKET = process.env.SPACES_BUCKET;
 const s3 = new S3Client({
@@ -83,22 +88,49 @@ function validId(id) {
   return typeof id === "string" && /^[A-Za-z0-9]{1,32}$/.test(id);
 }
 
-/** Read a link's meta.json from Spaces, or null if missing/expired. */
+/**
+ * Read a link's meta.json from Spaces, or null if missing/expired.
+ * Throws if storage itself fails, so callers can say "storage is down" instead
+ * of wrongly telling the viewer their link expired.
+ */
 async function readMeta(id) {
   if (!validId(id)) return null;
+  let meta;
   try {
     const obj = await s3.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: `${id}/meta.json` })
+      new GetObjectCommand({ Bucket: BUCKET, Key: `${id}/meta.json` }),
+      { abortSignal: AbortSignal.timeout(META_TIMEOUT_MS) }
     );
-    const meta = JSON.parse(await obj.Body.transformToString());
-    if (Date.now() > meta.expiresAt) {
-      deleteLink(id).catch(() => {}); // best-effort; lifecycle also sweeps it
-      return null;
-    }
-    return meta;
-  } catch {
+    meta = JSON.parse(await obj.Body.transformToString());
+  } catch (e) {
+    if (e.name === "NoSuchKey") return null;
+    console.error("Spaces read failed:", e.name, e.message);
+    throw e;
+  }
+  if (Date.now() > meta.expiresAt) {
+    deleteLink(id).catch(() => {}); // best-effort; lifecycle also sweeps it
     return null;
   }
+  return meta;
+}
+
+/**
+ * readMeta for a route: returns meta, null (missing/expired), or undefined after
+ * it has already replied 503 because storage is down.
+ */
+async function loadMeta(req, res, asJson) {
+  try {
+    return await readMeta(req.params.id);
+  } catch {
+    storageUnavailable(res, asJson);
+    return undefined;
+  }
+}
+
+/** Reply 503 with a viewer-facing "storage is down" message (JSON for the API, text otherwise). */
+function storageUnavailable(res, asJson) {
+  res.status(503);
+  return asJson ? res.json({ error: STORAGE_DOWN_MSG }) : res.send(STORAGE_DOWN_MSG);
 }
 
 /** Delete every object under a link prefix. */
@@ -246,7 +278,7 @@ app.post("/api/upload", (req, res) => {
     } catch (e) {
       console.error("Upload to Spaces failed:", e.name, e.message);
       deleteLink(req.linkId).catch(() => {});
-      res.status(500).json({ error: "Could not store the files. Please try again." });
+      res.status(503).json({ error: UPLOAD_FAILED_MSG });
     } finally {
       await cleanupTmp();
     }
@@ -255,7 +287,8 @@ app.post("/api/upload", (req, res) => {
 
 /** GET /api/link/:id — link metadata + file manifest (drives the download page). */
 app.get("/api/link/:id", async (req, res) => {
-  const meta = await readMeta(req.params.id);
+  const meta = await loadMeta(req, res, true);
+  if (meta === undefined) return; // 503 already sent
   if (!meta) return res.status(404).json({ error: "This link has expired or does not exist." });
   res.json({
     id: meta.id,
@@ -272,7 +305,8 @@ app.get("/api/link/:id", async (req, res) => {
  * download. Range requests are passed through to Spaces so video/audio scrub.
  */
 app.get("/api/file/:id/:fileId", async (req, res) => {
-  const meta = await readMeta(req.params.id);
+  const meta = await loadMeta(req, res, false);
+  if (meta === undefined) return;
   if (!meta) return res.status(404).send("This link has expired or does not exist.");
 
   const entry = meta.files.find((f) => f.fileId === req.params.fileId);
@@ -308,7 +342,8 @@ app.get("/api/file/:id/:fileId", async (req, res) => {
 
 /** GET /api/zip/:id — stream every file in the link as one .zip ("Download all"). */
 app.get("/api/zip/:id", async (req, res) => {
-  const meta = await readMeta(req.params.id);
+  const meta = await loadMeta(req, res, false);
+  if (meta === undefined) return;
   if (!meta) return res.status(404).send("This link has expired or does not exist.");
 
   res.setHeader("Content-Type", "application/zip");

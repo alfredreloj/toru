@@ -34,6 +34,8 @@
         <span id="clear-all" style="cursor:pointer;color:var(--accent-dark);">Clear all</span>
       </div>
 
+      <div class="alert hidden" id="upload-error" role="alert"></div>
+
       <button class="btn btn-primary" id="send-btn" disabled>Create share link</button>
 
       <div class="progress hidden" id="progress">
@@ -143,15 +145,38 @@
       setTimeout(() => t.classList.remove("show"), 1800);
     }
 
+    // After the bytes are sent the server still copies them to storage. That step
+    // used to hang silently, so warn when it runs long and give up with a clear
+    // error (the server's own storage timeout is 120s; this fires after it).
+    const SLOW_SAVE_MS = 20 * 1000;
+    const GIVE_UP_MS = 150 * 1000;
+    const errorEl = document.getElementById("upload-error");
+
+    /** Show a persistent error above the button (stays until the next attempt). */
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove("hidden");
+    }
+
+    /** Return the form to "ready to send" — the chosen files are kept for a retry. */
+    function resetUpload() {
+      sendBtn.classList.remove("hidden");
+      progressEl.classList.add("hidden");
+      fillEl.style.width = "0";
+    }
+
     sendBtn.onclick = () => {
       if (!chosen.length) return;
       const fd = new FormData();
       chosen.forEach((c) => fd.append("files", c.file));
 
+      errorEl.classList.add("hidden");
       sendBtn.classList.add("hidden");
       progressEl.classList.remove("hidden");
 
       const xhr = new XMLHttpRequest();
+      let slowTimer, giveUpTimer;
+      const clearTimers = () => { clearTimeout(slowTimer); clearTimeout(giveUpTimer); };
       xhr.open("POST", "/api/upload");
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
@@ -160,24 +185,33 @@
           progressLabelEl.textContent = pct < 100 ? "Uploading… " + pct + "%" : "Finishing up…";
         }
       };
+      xhr.upload.onload = () => {
+        progressLabelEl.textContent = "Finishing up…";
+        slowTimer = setTimeout(() => {
+          progressLabelEl.textContent = "Still saving your files — this is taking longer than usual…";
+        }, SLOW_SAVE_MS);
+        giveUpTimer = setTimeout(() => {
+          xhr.abort();
+          resetUpload();
+          showError("Toru isn't responding, so your files were not saved. Please try again in a few minutes.");
+        }, GIVE_UP_MS);
+      };
       xhr.onload = () => {
+        clearTimers();
         if (xhr.status === 200) {
           const data = JSON.parse(xhr.responseText);
           showResult(data);
         } else {
           let msg = "Upload failed. Please try again.";
           try { msg = JSON.parse(xhr.responseText).error || msg; } catch {}
-          toast(msg);
-          sendBtn.classList.remove("hidden");
-          progressEl.classList.add("hidden");
-          fillEl.style.width = "0";
+          resetUpload();
+          showError(msg);
         }
       };
       xhr.onerror = () => {
-        toast("Network error. Please try again.");
-        sendBtn.classList.remove("hidden");
-        progressEl.classList.add("hidden");
-        fillEl.style.width = "0";
+        clearTimers();
+        resetUpload();
+        showError("Couldn't reach Toru. Check your internet connection and try again.");
       };
       xhr.send(fd);
     };

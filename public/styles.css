@@ -192,3 +192,10 @@ body {
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+/* Persistent error message (upload failures) — stays until the next attempt. */
+.alert {
+  margin: 14px 0 0; padding: 12px 14px; border-radius: 12px;
+  background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger);
+  font-size: 14px; line-height: 1.45;
+}
